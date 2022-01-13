@@ -42,7 +42,10 @@ if is_torch_available():
     import torch
 
 if is_torch_tpu_available():
-    import torch_xla.core.xla_model as xm
+    import lazy_tensor_core as ltc
+    import lazy_tensor_core.core.lazy_model as xm
+    xm.xla_device = xm.lazy_device
+    ltc._LAZYC._ltc_init_ts_backend()
 
 if is_sagemaker_dp_enabled():
     import smdistributed.dataparallel.torch.distributed as sm_dist
@@ -981,7 +984,7 @@ class TrainingArguments:
                     )
                 torch.distributed.init_process_group(backend=self.xpu_backend)
         elif is_torch_tpu_available():
-            device = xm.xla_device()
+            device = xm.xla_device(n=0,devkind='GPU')
             self._n_gpu = 0
         elif is_sagemaker_mp_enabled():
             local_rank = smp.local_rank()

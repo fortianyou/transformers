@@ -155,9 +155,13 @@ if is_datasets_available():
     import datasets
 
 if is_torch_tpu_available():
-    import torch_xla.core.xla_model as xm
-    import torch_xla.debug.metrics as met
-    import torch_xla.distributed.parallel_loader as pl
+    import lazy_tensor_core as ltc
+    import lazy_tensor_core.core.lazy_model as xm
+    import lazy_tensor_core.debug.metrics as met
+    import lazy_tensor_core.distributed.parallel_loader as pl
+    
+    xm.xla_device = xm.lazy_device
+    ltc._LAZYC._ltc_init_ts_backend()
 
 if is_fairscale_available():
     dep_version_check("fairscale")

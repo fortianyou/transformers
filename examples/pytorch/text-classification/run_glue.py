@@ -440,7 +440,7 @@ def main():
     if data_args.task_name is not None:
         metric = load_metric("glue", data_args.task_name)
     else:
-        metric = load_metric("accuracy")
+        metric = load_metric("/home/tianyou.gty/POC/torch/training/transformers/examples/accuracy.py")
 
     # You can define your custom compute_metrics function. It takes an `EvalPrediction` object (a namedtuple with a
     # predictions and label_ids field) and has to return a dictionary string to float.
@@ -483,6 +483,7 @@ def main():
             checkpoint = training_args.resume_from_checkpoint
         elif last_checkpoint is not None:
             checkpoint = last_checkpoint
+
         train_result = trainer.train(resume_from_checkpoint=checkpoint)
         metrics = train_result.metrics
         max_train_samples = (
