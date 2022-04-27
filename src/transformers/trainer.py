@@ -155,13 +155,10 @@ if is_datasets_available():
     import datasets
 
 if is_torch_tpu_available():
-    import lazy_tensor_core as ltc
-    import lazy_tensor_core.core.lazy_model as xm
-    import lazy_tensor_core.debug.metrics as met
-    import lazy_tensor_core.distributed.parallel_loader as pl
-    
-    xm.xla_device = xm.lazy_device
-    ltc._LAZYC._ltc_init_ts_backend()
+    from torch._lazy import ts_backend
+    ts_backend.init()
+    import torch_disc as disc
+    disc._ltc_init_disc_backend()
 
 if is_fairscale_available():
     dep_version_check("fairscale")
@@ -1054,7 +1051,6 @@ class Trainer:
         self._memory_tracker.start()
 
         args = self.args
-
         self.is_in_train = True
 
         # do_train is not a reliable argument, as it might not be set and .train() still called, so
@@ -1289,6 +1285,7 @@ class Trainer:
                 train_dataloader.dataset.set_epoch(epoch)
 
             if is_torch_tpu_available():
+                from lazy_tensor_core.distributed import parallel_loader as pl
                 parallel_loader = pl.ParallelLoader(train_dataloader, [args.device]).per_device_loader(args.device)
                 epoch_iterator = parallel_loader
             else:
@@ -1305,7 +1302,6 @@ class Trainer:
 
             step = -1
             for step, inputs in enumerate(epoch_iterator):
-
                 # Skip past any already trained steps if resuming training
                 if steps_trained_in_current_epoch > 0:
                     steps_trained_in_current_epoch -= 1
@@ -1379,7 +1375,17 @@ class Trainer:
                     if self.deepspeed:
                         pass  # called outside the loop
                     elif is_torch_tpu_available():
-                        xm.optimizer_step(self.optimizer)
+                        import torch._lazy as ltm
+                        import torch._lazy.metrics as metrics
+                        self.optimizer.step()
+                        ltm.mark_step()
+                        print("-------------begin new mark_step---------------")
+                        for opname in metrics.counter_names():
+                            val = int(metrics.counter_value(opname))
+                            print(f"{opname}={val}")
+                        print("-------------terminate the mark_step---------------")
+                        #xm.optimizer_step(self.optimizer)
+
                     elif self.do_grad_scaling:
                         scale_before = self.scaler.get_scale()
                         self.scaler.step(self.optimizer)
@@ -1395,6 +1401,7 @@ class Trainer:
                     model.zero_grad()
                     self.state.global_step += 1
                     self.state.epoch = epoch + (step + 1) / steps_in_epoch
+
                     self.control = self.callback_handler.on_step_end(args, self.state, self.control)
 
                     self._maybe_log_save_evaluate(tr_loss, model, trial, epoch, ignore_keys_for_eval)
@@ -1522,9 +1529,9 @@ class Trainer:
             metrics = self.evaluate(ignore_keys=ignore_keys_for_eval)
             self._report_to_hp_search(trial, epoch, metrics)
 
-        if self.control.should_save:
-            self._save_checkpoint(model, trial, metrics=metrics)
-            self.control = self.callback_handler.on_save(self.args, self.state, self.control)
+        # if self.control.should_save:
+        #     self._save_checkpoint(model, trial, metrics=metrics)
+        #     self.control = self.callback_handler.on_save(self.args, self.state, self.control)
 
     def _load_rng_state(self, checkpoint):
         # Load RNG states from `checkpoint`
@@ -1602,11 +1609,12 @@ class Trainer:
             self.optimizer.consolidate_state_dict()
 
         if is_torch_tpu_available():
-            xm.rendezvous("saving_optimizer_states")
-            xm.save(self.optimizer.state_dict(), os.path.join(output_dir, OPTIMIZER_NAME))
-            with warnings.catch_warnings(record=True) as caught_warnings:
-                xm.save(self.lr_scheduler.state_dict(), os.path.join(output_dir, SCHEDULER_NAME))
-                reissue_pt_warnings(caught_warnings)
+            pass 
+            # xm.rendezvous("saving_optimizer_states")
+            # xm.save(self.optimizer.state_dict(), os.path.join(output_dir, OPTIMIZER_NAME))
+            # with warnings.catch_warnings(record=True) as caught_warnings:
+            #     xm.save(self.lr_scheduler.state_dict(), os.path.join(output_dir, SCHEDULER_NAME))
+            #     reissue_pt_warnings(caught_warnings)
         elif is_sagemaker_mp_enabled():
             if smp.dp_rank() == 0:
                 # Consolidate the state dict on all processed of dp_rank 0
@@ -1965,6 +1973,7 @@ class Trainer:
 
         Will only save from the main process.
         """
+        return
 
         if output_dir is None:
             output_dir = self.args.output_dir
@@ -2009,6 +2018,8 @@ class Trainer:
             self._save(output_dir)
 
     def _save_tpu(self, output_dir: Optional[str] = None):
+        return
+
         output_dir = output_dir if output_dir is not None else self.args.output_dir
         logger.info(f"Saving model checkpoint to {output_dir}")
 
@@ -2304,6 +2315,7 @@ class Trainer:
         eval_dataset = dataloader.dataset
 
         if is_torch_tpu_available():
+            from lazy_tensor_core.distributed import parallel_loader as pl
             dataloader = pl.ParallelLoader(dataloader, [args.device]).per_device_loader(args.device)
 
         if args.past_index >= 0:

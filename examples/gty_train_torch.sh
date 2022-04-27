@@ -4,22 +4,22 @@
 #   https://huggingface.co/bert-base-cased/resolve/main/pytorch_model.bin \
 #   -O bert-base-cased.bin
 
-# export LTC_IR_DEBUG=1
-# export LTC_SAVE_TENSORS_FILE=dump/ltc_ir.txt
-# export LTC_SAVE_TENSORS_FMT=text
-# # 
-# export LTC_METRICS_FILE=dump/ltc_metrics.txt
-# rm -rf $LTC_SAVE_TENSORS_FILE
+rm -rf dump && mkdir -p dump
+#export LTC_IR_DEBUG=1
+export LTC_SAVE_TENSORS_FILE=dump/ltc_ir.txt
+export LTC_SAVE_TENSORS_FMT=backend
 
 #export APPLY_PENDING_GRAPH_MATERIALIZE=on
-export LTC_TS_CUDA=1
-
+#export LTC_EMIT_STEPLOG=1
 #train_script="pytorch/xla_spawn.py --num_cores 1"
 #train_script="-m torch.distributed.launch --nproc_per_node 1"
-
+export TORCH_DISC_LTC_DISABLE_DISC=true
+export TORCH_DISC_LTC_DUMP_TS_GRAPH_DATA=true
+export PYTHONPATH=$(pwd)
 export CUDA_VISIBLE_DEVICES=1
-# export DISABLE_TORCH_LTC=on
-python3 $train_script \
+export LTC_TS_CUDA=1
+#export DISABLE_TORCH_LTC=on
+python $train_script \
   pytorch/text-classification/run_glue.py \
   --config_name bert-base-cased \
   --tokenizer_name bert-base-cased \
@@ -32,4 +32,10 @@ python3 $train_script \
   --learning_rate 2e-5 \
   --num_train_epochs 3 \
   --overwrite_output_dir \
-  --output_dir /tmp/imdb/ 2>&1 | tee train.ltc.log
+  --logging_steps 3000 \
+  --save_steps 3000 \
+  --max_grad_norm 1.0 \
+  --output_dir /tmp/imdb/ 2>&1 | tee train.torch.log
+#  --output_dir /tmp/imdb/ 2>&1 | tee train.ltc.log
+
+#  --max_steps 4 \

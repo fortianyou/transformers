@@ -446,12 +446,7 @@ def is_torch_tpu_available():
         return False
     if not _torch_available:
         return False
-    # This test is probably enough, but just in case, we unpack a bit.
-    if importlib.util.find_spec("lazy_tensor_core") is None:
-        return False
-    if importlib.util.find_spec("lazy_tensor_core.core") is None:
-        return False
-    return importlib.util.find_spec("lazy_tensor_core.core.lazy_model") is not None
+    return importlib.util.find_spec("torch._lazy") is not None
 
 
 def is_datasets_available():
