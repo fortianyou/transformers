@@ -212,7 +212,6 @@ def main():
     transformers.utils.logging.set_verbosity(log_level)
     transformers.utils.logging.enable_default_handler()
     transformers.utils.logging.enable_explicit_format()
-
     # Log on each process the small summary:
     logger.warning(
         f"Process rank: {training_args.local_rank}, device: {training_args.device}, n_gpu: {training_args.n_gpu}"
@@ -440,7 +439,7 @@ def main():
     if data_args.task_name is not None:
         metric = load_metric("glue", data_args.task_name)
     else:
-        metric = load_metric("/home/tianyou.gty/POC/torch/training/transformers/examples/accuracy.py")
+        metric = load_metric("accuracy")
 
     # You can define your custom compute_metrics function. It takes an `EvalPrediction` object (a namedtuple with a
     # predictions and label_ids field) and has to return a dictionary string to float.
