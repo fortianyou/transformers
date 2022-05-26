@@ -5,6 +5,10 @@
 1. (option)download the pre-trained model from AliCloud OSS if you're in the
 backend of WFG.
 
+    ``` bash
+    wget http://223502.oss-cn-hangzhou-zmf.aliyuncs.com/temp/bert-base-cased.bin
+    ```
+
 1. run the following bash command:
 
     ``` bash
