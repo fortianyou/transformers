@@ -73,6 +73,7 @@ from .file_utils import (
     is_sagemaker_dp_enabled,
     is_sagemaker_mp_enabled,
     is_torch_tpu_available,
+    is_torch_disc_available,
 )
 from .modelcard import TrainingSummary
 from .modeling_utils import PreTrainedModel, unwrap_model
@@ -151,14 +152,20 @@ if version.parse(torch.__version__) >= version.parse("1.6"):
     _is_native_amp_available = True
     from torch.cuda.amp import autocast
 
+if is_torch_disc_available():
+    print("Enable DISC Accelerator !!")
+    import torch._lazy as ltc
+    import torch_disc as disc
+    torch._C._lazy_ts_backend._init()
+    disc._ltc_init_disc_backend()
+
 if is_datasets_available():
     import datasets
 
 if is_torch_tpu_available():
-    from torch._lazy import ts_backend
-    ts_backend.init()
-    import torch_disc as disc
-    disc._ltc_init_disc_backend()
+    import torch_xla.core.xla_model as xm
+    import torch_xla.debug.metrics as met
+    import torch_xla.distributed.parallel_loader as pl
 
 if is_fairscale_available():
     dep_version_check("fairscale")
@@ -1285,7 +1292,7 @@ class Trainer:
                 train_dataloader.dataset.set_epoch(epoch)
 
             if is_torch_tpu_available():
-                from lazy_tensor_core.distributed import parallel_loader as pl
+                #from lazy_tensor_core.distributed import parallel_loader as pl
                 parallel_loader = pl.ParallelLoader(train_dataloader, [args.device]).per_device_loader(args.device)
                 epoch_iterator = parallel_loader
             else:
@@ -1327,6 +1334,9 @@ class Trainer:
                         tr_loss_step = self.training_step(model, inputs)
                 else:
                     tr_loss_step = self.training_step(model, inputs)
+
+                if is_torch_disc_available():
+                    ltc.mark_step()
 
                 if (
                     args.logging_nan_inf_filter
@@ -1375,15 +1385,21 @@ class Trainer:
                     if self.deepspeed:
                         pass  # called outside the loop
                     elif is_torch_tpu_available():
-                        import torch._lazy as ltm
+                        if self.do_grad_scaling:
+                            self.scaler.step(self.optimizer)
+                            self.scaler.update()
+                        else:
+                            xm.optimizer_step(self.optimizer)
+                    
+                    elif is_torch_disc_available():
                         import torch._lazy.metrics as metrics
                         self.optimizer.step()
-                        ltm.mark_step()
-                        print("-------------begin new mark_step---------------")
+                        ltc.mark_step()
+                        logger.info("-------------begin new mark_step---------------")
                         for opname in metrics.counter_names():
                             val = int(metrics.counter_value(opname))
-                            print(f"{opname}={val}")
-                        print("-------------terminate the mark_step---------------")
+                            logger.info(f"{opname}={val}")
+                        logger.info("-------------terminate the mark_step---------------")
                         #xm.optimizer_step(self.optimizer)
 
                     elif self.do_grad_scaling:
@@ -1399,6 +1415,10 @@ class Trainer:
                         self.lr_scheduler.step()
 
                     model.zero_grad()
+
+                    if is_torch_disc_available():
+                        ltc.mark_step()
+
                     self.state.global_step += 1
                     self.state.epoch = epoch + (step + 1) / steps_in_epoch
 
@@ -1417,6 +1437,13 @@ class Trainer:
                     f" num_steps ({max_steps}) higher than the number of available samples."
                 )
                 self.control.should_training_stop = True
+            if is_torch_disc_available():
+                import torch._lazy.metrics as metrics
+                logger.info("------------- Begin Torch DISC LTC Metrics ---------------")
+                for opname in metrics.counter_names():
+                    val = int(metrics.counter_value(opname))
+                    logger.info(f"{opname}={val}")
+                logger.info("------------- End Torch DISC LTC Metrics ---------------")
 
             self.control = self.callback_handler.on_epoch_end(args, self.state, self.control)
             self._maybe_log_save_evaluate(tr_loss, model, trial, epoch, ignore_keys_for_eval)
@@ -2376,6 +2403,9 @@ class Trainer:
 
                 # Set back to None to begin a new accumulation
                 losses_host, preds_host, labels_host = None, None, None
+
+            if is_torch_disc_available():
+                ltc.mark_step()
 
         if args.past_index and hasattr(self, "_past"):
             # Clean the state at the end of the evaluation loop
