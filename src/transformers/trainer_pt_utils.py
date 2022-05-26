@@ -52,8 +52,14 @@ else:
 if is_training_run_on_sagemaker():
     logging.add_handler(StreamHandler(sys.stdout))
 
-if is_torch_tpu_available():
-    import torch_xla.core.xla_model as xm
+
+# if is_torch_tpu_available():
+#     from torch._lazy import ts_backend
+#     # ts_backend.init()
+#     #import lazy_tensor_core as ltc
+#     #import lazy_tensor_core.core.lazy_model as xm
+#     #xm.xla_device = xm.lazy_device
+#     #ltc._LAZYC._ltc_init_ts_backend()
 
 # this is used to suppress an undesired warning emitted by pytorch versions 1.4.2-1.7.0
 try:
@@ -154,8 +160,6 @@ def nested_detach(tensors):
 
 def nested_xla_mesh_reduce(tensors, name):
     if is_torch_tpu_available():
-        import torch_xla.core.xla_model as xm
-
         if isinstance(tensors, (list, tuple)):
             return type(tensors)(nested_xla_mesh_reduce(t, f"{name}_{i}") for i, t in enumerate(tensors))
         if tensors.ndim == 0:

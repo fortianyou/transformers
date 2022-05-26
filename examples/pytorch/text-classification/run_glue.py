@@ -44,7 +44,7 @@ from transformers import (
 from transformers.trainer_utils import get_last_checkpoint
 from transformers.utils import check_min_version
 from transformers.utils.versions import require_version
-
+import torch
 
 # Will error if the minimal version of Transformers is not installed. Remove at your own risks.
 check_min_version("4.16.0.dev0")
@@ -212,7 +212,6 @@ def main():
     transformers.utils.logging.set_verbosity(log_level)
     transformers.utils.logging.enable_default_handler()
     transformers.utils.logging.enable_explicit_format()
-
     # Log on each process the small summary:
     logger.warning(
         f"Process rank: {training_args.local_rank}, device: {training_args.device}, n_gpu: {training_args.n_gpu}"
@@ -483,14 +482,38 @@ def main():
             checkpoint = training_args.resume_from_checkpoint
         elif last_checkpoint is not None:
             checkpoint = last_checkpoint
+
         train_result = trainer.train(resume_from_checkpoint=checkpoint)
+        '''
+        with torch.profiler.profile(
+            activities=[
+                torch.profiler.ProfilerActivity.CPU,
+                torch.profiler.ProfilerActivity.CUDA,
+            ],
+            with_stack=True,
+        #    on_trace_ready=torch.profiler.tensorboard_trace_handler(dir_name='tensorboard')
+        ) as p:
+            train_result = trainer.train(resume_from_checkpoint=checkpoint)
+
+        profile_dir = 'profiles'
+        p.export_chrome_trace(os.path.join(profile_dir, 'train_profile_chrome.json'))
+        p.export_stacks(os.path.join(profile_dir, 'stack.self_cpu_time_total.log'), metric='self_cpu_time_total')
+        p.export_stacks(os.path.join(profile_dir, 'stack.self_cuda_time_total.log'), metric='self_cuda_time_total')
+        with open(os.path.join(profile_dir, 'profile.self_cuda_time_total.log'), 'w') as writer:
+            writer.write(str(p.key_averages().table(
+                               sort_by="self_cuda_time_total", row_limit=-1)))
+        with open(os.path.join(profile_dir, 'profile.self_cpu_time_total.log'), 'w') as writer:
+            writer.write(str(p.key_averages().table(
+                               sort_by="self_cpu_time_total", row_limit=-1)))
+        '''
+
         metrics = train_result.metrics
         max_train_samples = (
             data_args.max_train_samples if data_args.max_train_samples is not None else len(train_dataset)
         )
         metrics["train_samples"] = min(max_train_samples, len(train_dataset))
 
-        trainer.save_model()  # Saves the tokenizer too for easy upload
+        # trainer.save_model()  # Saves the tokenizer too for easy upload
 
         trainer.log_metrics("train", metrics)
         trainer.save_metrics("train", metrics)
