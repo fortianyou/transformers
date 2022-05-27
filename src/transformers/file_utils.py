@@ -442,7 +442,7 @@ def is_flax_available():
 
 
 def is_torch_disc_available():
-    if os.environ.get("DISABLE_TORCH_DISC", None) is not None:
+    if os.environ.get("BENCHMARK_DISABLE_TORCH_DISC", None) is not None:
         return False
     if not _torch_available:
         return False

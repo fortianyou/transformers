@@ -406,6 +406,7 @@ class TrainingArguments:
             )
         },
     )
+    enable_profiler : bool = field(default=False, metadata={"help": "Whether to output profile metrics on dir: ./profiles"})
 
     do_train: bool = field(default=False, metadata={"help": "Whether to run training."})
     do_eval: bool = field(default=False, metadata={"help": "Whether to run eval on the dev set."})
