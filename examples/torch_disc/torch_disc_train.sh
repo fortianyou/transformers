@@ -16,8 +16,8 @@ function set_default_env() {
 
   # LTC debug envs
   rm -rf dump && mkdir -p dump
-  export LTC_SAVE_TENSORS_FILE=dump/ltc_ir.txt
-  export LTC_SAVE_TENSORS_FMT=backend
+  #export LTC_SAVE_TENSORS_FILE=dump/ltc_ir.txt
+  #export LTC_SAVE_TENSORS_FMT=backend
 }
 
 source parse_args.sh
