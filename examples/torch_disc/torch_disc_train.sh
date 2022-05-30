@@ -18,7 +18,10 @@ export TORCH_DISC_LTC_DUMP_TS_GRAPH_DATA=true
 export PYTHONPATH=$(pwd)/../../src
 export CUDA_VISIBLE_DEVICES=1
 export LTC_DISC_CUDA=1
-export DISABLE_TORCH_DISC=1
+#export BENCHMARK_ENABLE_NVPROF=1
+#export BENCHMARK_DISABLE_TORCH_DISC=1
+export LD_LIBRARY_PATH=/usr/local/cuda-11.0/targets/x86_64-linux/lib/:$LD_LIBRARY_PATH
+#nvprof --profile-from-start off python $train_script \
 python $train_script \
   ../pytorch/text-classification/run_glue.py \
   --config_name bert-base-cased \
@@ -26,7 +29,6 @@ python $train_script \
   --model_name_or_path bert-base-cased.bin \
   --dataset_name imdb  \
   --do_train \
-  --do_predict \
   --max_seq_length 128 \
   --per_device_train_batch_size 32 \
   --learning_rate 2e-5 \

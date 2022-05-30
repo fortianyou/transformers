@@ -159,6 +159,25 @@ if is_torch_disc_available():
     torch._C._lazy_ts_backend._init()
     disc._ltc_init_disc_backend()
 
+def is_nvprof_available():
+    if os.environ.get("BENCHMARK_ENABLE_NVPROF") is not None:
+        return True
+    return False
+
+if is_nvprof_available():
+    import ctypes
+    _cudart = ctypes.CDLL('libcudart.so')
+
+def nvprof_start():
+    ret = _cudart.cudaProfilerStart()
+    if ret != 0:
+        raise Exception('cudaProfilerStart() returned %d' % ret)
+
+def nvprof_end():
+    ret = _cudart.cudaProfilerStop()
+    if ret != 0:
+        raise Exception('cudaProfilerStart() returned %d' % ret)
+
 if is_datasets_available():
     import datasets
 
@@ -1060,6 +1079,11 @@ class Trainer:
         args = self.args
         self.is_in_train = True
 
+        profiler = None
+        if "profiler" in kwargs:
+            profiler = kwargs["profiler"]
+            kwargs.pop("profiler")
+
         # do_train is not a reliable argument, as it might not be set and .train() still called, so
         # the following is a workaround:
         if (args.fp16_full_eval or args.bf16_full_eval) and not args.do_train:
@@ -1309,6 +1333,14 @@ class Trainer:
 
             step = -1
             for step, inputs in enumerate(epoch_iterator):
+                if is_nvprof_available() and step == 10:
+                    logger.info(f"nvprof start at step: {step}")
+                    nvprof_start()
+
+                if is_nvprof_available() and step == 20:
+                    logger.info(f"nvprof end at step: {step}")
+                    nvprof_end()
+
                 # Skip past any already trained steps if resuming training
                 if steps_trained_in_current_epoch > 0:
                     steps_trained_in_current_epoch -= 1
@@ -1390,18 +1422,6 @@ class Trainer:
                             self.scaler.update()
                         else:
                             xm.optimizer_step(self.optimizer)
-                    
-                    elif is_torch_disc_available():
-                        import torch._lazy.metrics as metrics
-                        self.optimizer.step()
-                        ltc.mark_step()
-                        logger.info("-------------begin new mark_step---------------")
-                        for opname in metrics.counter_names():
-                            val = int(metrics.counter_value(opname))
-                            logger.info(f"{opname}={val}")
-                        logger.info("-------------terminate the mark_step---------------")
-                        #xm.optimizer_step(self.optimizer)
-
                     elif self.do_grad_scaling:
                         scale_before = self.scaler.get_scale()
                         self.scaler.step(self.optimizer)
@@ -1427,6 +1447,9 @@ class Trainer:
                     self._maybe_log_save_evaluate(tr_loss, model, trial, epoch, ignore_keys_for_eval)
                 else:
                     self.control = self.callback_handler.on_substep_end(args, self.state, self.control)
+
+                if profiler is not None:
+                    profiler.step()
 
                 if self.control.should_epoch_stop or self.control.should_training_stop:
                     break

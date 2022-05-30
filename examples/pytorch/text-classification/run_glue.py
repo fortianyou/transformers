@@ -482,30 +482,27 @@ def main():
             checkpoint = training_args.resume_from_checkpoint
         elif last_checkpoint is not None:
             checkpoint = last_checkpoint
-
-        train_result = trainer.train(resume_from_checkpoint=checkpoint)
-        '''
-        with torch.profiler.profile(
-            activities=[
-                torch.profiler.ProfilerActivity.CPU,
-                torch.profiler.ProfilerActivity.CUDA,
-            ],
-            with_stack=True,
-        #    on_trace_ready=torch.profiler.tensorboard_trace_handler(dir_name='tensorboard')
-        ) as p:
+        if not training_args.enable_profiler:
             train_result = trainer.train(resume_from_checkpoint=checkpoint)
+        else:
+            with torch.profiler.profile(
+                activities=[
+                    torch.profiler.ProfilerActivity.CPU,
+                    torch.profiler.ProfilerActivity.CUDA,
+                ],
+                with_stack=True,
+            #    on_trace_ready=torch.profiler.tensorboard_trace_handler(dir_name='tensorboard')
+            ) as p:
+                train_result = trainer.train(resume_from_checkpoint=checkpoint, profiler=p)
 
-        profile_dir = 'profiles'
-        p.export_chrome_trace(os.path.join(profile_dir, 'train_profile_chrome.json'))
-        p.export_stacks(os.path.join(profile_dir, 'stack.self_cpu_time_total.log'), metric='self_cpu_time_total')
-        p.export_stacks(os.path.join(profile_dir, 'stack.self_cuda_time_total.log'), metric='self_cuda_time_total')
-        with open(os.path.join(profile_dir, 'profile.self_cuda_time_total.log'), 'w') as writer:
-            writer.write(str(p.key_averages().table(
-                               sort_by="self_cuda_time_total", row_limit=-1)))
-        with open(os.path.join(profile_dir, 'profile.self_cpu_time_total.log'), 'w') as writer:
-            writer.write(str(p.key_averages().table(
-                               sort_by="self_cpu_time_total", row_limit=-1)))
-        '''
+            profile_dir = 'profiles'
+            p.export_chrome_trace(os.path.join(profile_dir, 'train_profile_chrome.json'))
+            p.export_stacks(os.path.join(profile_dir, 'stack.self_cpu_time_total.log'), metric='self_cpu_time_total')
+            p.export_stacks(os.path.join(profile_dir, 'stack.self_cuda_time_total.log'), metric='self_cuda_time_total')
+            with open(os.path.join(profile_dir, 'profile.self_cuda_time_total.log'), 'w') as writer:
+                writer.write(str(p.key_averages().table(sort_by="self_cuda_time_total", row_limit=-1)))
+            with open(os.path.join(profile_dir, 'profile.self_cpu_time_total.log'), 'w') as writer:
+                writer.write(str(p.key_averages().table(sort_by="self_cpu_time_total", row_limit=-1)))
 
         metrics = train_result.metrics
         max_train_samples = (
