@@ -441,12 +441,20 @@ def is_flax_available():
     return _flax_available
 
 
-def is_torch_disc_available():
-    if os.environ.get("BENCHMARK_DISABLE_TORCH_DISC", None) is not None:
+def is_torch_ltc_available():
+    if os.environ.get("BENCHMARK_ENABLE_TORCH_LTC", "OFF") == "OFF":
         return False
     if not _torch_available:
         return False
     return importlib.util.find_spec("torch._lazy") is not None
+
+
+def is_torch_disc_available():
+    if not is_torch_ltc_available():
+        return False
+    if os.environ.get("BENCHMARK_ENABLE_TORCH_DISC", "OFF") == "OFF":
+        return False
+    return importlib.util.find_spec("torch_disc") is not None
 
 
 def is_torch_tpu_available():

@@ -74,6 +74,7 @@ from .file_utils import (
     is_sagemaker_mp_enabled,
     is_torch_tpu_available,
     is_torch_disc_available,
+    is_torch_ltc_available,
 )
 from .modelcard import TrainingSummary
 from .modeling_utils import PreTrainedModel, unwrap_model
@@ -152,15 +153,21 @@ if version.parse(torch.__version__) >= version.parse("1.6"):
     _is_native_amp_available = True
     from torch.cuda.amp import autocast
 
-if is_torch_disc_available():
-    print("Enable DISC Accelerator !!")
+
+if is_torch_ltc_available():
+    print("Enable Torch LTC !!")
     import torch._lazy as ltc
-    import torch_disc as disc
     torch._C._lazy_ts_backend._init()
+
+
+if is_torch_disc_available():
+    print("Enable Torch Disc !!")
+    import torch_disc as disc
     disc._ltc_init_disc_backend()
 
+
 def is_nvprof_available():
-    if os.environ.get("BENCHMARK_ENABLE_NVPROF") is not None:
+    if os.environ.get("BENCHMARK_ENABLE_NVPROF", "OFF") == "ON":
         return True
     return False
 
@@ -1308,7 +1315,8 @@ class Trainer:
                 # We just need to begin an iteration to create the randomization of the sampler.
                 for _ in train_dataloader:
                     break
-
+        skip_steps = 10
+        start_time_skiped = time.time()
         for epoch in range(epochs_trained, num_train_epochs):
             if isinstance(train_dataloader, DataLoader) and isinstance(train_dataloader.sampler, DistributedSampler):
                 train_dataloader.sampler.set_epoch(epoch)
@@ -1333,14 +1341,15 @@ class Trainer:
 
             step = -1
             for step, inputs in enumerate(epoch_iterator):
-                if is_nvprof_available() and step == 10:
+                if is_nvprof_available() and step == 90:
                     logger.info(f"nvprof start at step: {step}")
                     nvprof_start()
 
-                if is_nvprof_available() and step == 20:
+                if is_nvprof_available() and step == 100:
                     logger.info(f"nvprof end at step: {step}")
                     nvprof_end()
-
+                if self.state.global_step == skip_steps:
+                    start_time_skiped = time.time() 
                 # Skip past any already trained steps if resuming training
                 if steps_trained_in_current_epoch > 0:
                     steps_trained_in_current_epoch -= 1
@@ -1367,9 +1376,6 @@ class Trainer:
                 else:
                     tr_loss_step = self.training_step(model, inputs)
 
-                if is_torch_disc_available():
-                    ltc.mark_step()
-
                 if (
                     args.logging_nan_inf_filter
                     and not is_torch_tpu_available()
@@ -1379,6 +1385,7 @@ class Trainer:
                     tr_loss += tr_loss / (1 + self.state.global_step - self._globalstep_last_logged)
                 else:
                     tr_loss += tr_loss_step
+
 
                 self.current_flos += float(self.floating_point_ops(inputs))
 
@@ -1436,9 +1443,6 @@ class Trainer:
 
                     model.zero_grad()
 
-                    if is_torch_disc_available():
-                        ltc.mark_step()
-
                     self.state.global_step += 1
                     self.state.epoch = epoch + (step + 1) / steps_in_epoch
 
@@ -1460,13 +1464,14 @@ class Trainer:
                     f" num_steps ({max_steps}) higher than the number of available samples."
                 )
                 self.control.should_training_stop = True
-            if is_torch_disc_available():
+            if is_torch_ltc_available():
                 import torch._lazy.metrics as metrics
                 logger.info("------------- Begin Torch DISC LTC Metrics ---------------")
                 for opname in metrics.counter_names():
                     val = int(metrics.counter_value(opname))
                     logger.info(f"{opname}={val}")
                 logger.info("------------- End Torch DISC LTC Metrics ---------------")
+                metrics.reset()
 
             self.control = self.callback_handler.on_epoch_end(args, self.state, self.control)
             self._maybe_log_save_evaluate(tr_loss, model, trial, epoch, ignore_keys_for_eval)
@@ -1528,6 +1533,10 @@ class Trainer:
         train_loss = self._total_loss_scalar / self.state.global_step
 
         metrics = speed_metrics("train", start_time, num_samples=num_train_samples, num_steps=self.state.max_steps)
+        skip_samples = skip_steps * total_train_batch_size
+        metrics2 = speed_metrics("train", start_time_skiped, num_samples=num_train_samples - skip_samples, num_steps=self.state.max_steps - skip_steps)
+        self.log_metrics(f"train skip {skip_steps} steps", metrics2)
+
         self.store_flos()
         metrics["total_flos"] = self.state.total_flos
         metrics["train_loss"] = train_loss
@@ -1971,6 +1980,9 @@ class Trainer:
             loss = self.deepspeed.backward(loss)
         else:
             loss.backward()
+
+        if is_torch_ltc_available():
+            ltc.mark_step()
 
         return loss.detach()
 
@@ -2427,7 +2439,7 @@ class Trainer:
                 # Set back to None to begin a new accumulation
                 losses_host, preds_host, labels_host = None, None, None
 
-            if is_torch_disc_available():
+            if is_torch_ltc_available():
                 ltc.mark_step()
 
         if args.past_index and hasattr(self, "_past"):

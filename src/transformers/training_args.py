@@ -31,6 +31,7 @@ from .file_utils import (
     is_torch_available,
     is_torch_bf16_available,
     is_torch_disc_available,
+    is_torch_ltc_available,
     is_torch_tf32_available,
     is_torch_tpu_available,
     torch_required,
@@ -406,8 +407,6 @@ class TrainingArguments:
             )
         },
     )
-    enable_profiler : bool = field(default=False, metadata={"help": "Whether to output profile metrics on dir: ./profiles"})
-
     do_train: bool = field(default=False, metadata={"help": "Whether to run training."})
     do_eval: bool = field(default=False, metadata={"help": "Whether to run eval on the dev set."})
     do_predict: bool = field(default=False, metadata={"help": "Whether to run predictions on the test set."})
@@ -987,7 +986,7 @@ class TrainingArguments:
                         "Please set '--xpu_backend' to either 'mpi' or 'ccl'."
                     )
                 torch.distributed.init_process_group(backend=self.xpu_backend)
-        elif is_torch_disc_available():
+        elif is_torch_ltc_available():
             device = torch.device('lazy')
             self._n_gpu = 0
         elif is_torch_tpu_available():
