@@ -158,6 +158,7 @@ if is_torch_ltc_available():
     print("Enable Torch LTC !!")
     import torch._lazy as ltc
     torch._C._lazy_ts_backend._init()
+    import torch._lazy.metrics as ltc_metrics
 
 
 if is_torch_disc_available():
@@ -1386,7 +1387,6 @@ class Trainer:
                 else:
                     tr_loss += tr_loss_step
 
-
                 self.current_flos += float(self.floating_point_ops(inputs))
 
                 # Optimizer step for deepspeed must be called on every step regardless of the value of gradient_accumulation_steps
@@ -1465,13 +1465,12 @@ class Trainer:
                 )
                 self.control.should_training_stop = True
             if is_torch_ltc_available():
-                import torch._lazy.metrics as metrics
                 logger.info("------------- Begin Torch DISC LTC Metrics ---------------")
-                for opname in metrics.counter_names():
-                    val = int(metrics.counter_value(opname))
+                for opname in ltc_metrics.counter_names():
+                    val = int(ltc_metrics.counter_value(opname))
                     logger.info(f"{opname}={val}")
                 logger.info("------------- End Torch DISC LTC Metrics ---------------")
-                metrics.reset()
+                ltc_metrics.reset()
 
             self.control = self.callback_handler.on_epoch_end(args, self.state, self.control)
             self._maybe_log_save_evaluate(tr_loss, model, trial, epoch, ignore_keys_for_eval)
