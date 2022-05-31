@@ -482,7 +482,7 @@ def main():
             checkpoint = training_args.resume_from_checkpoint
         elif last_checkpoint is not None:
             checkpoint = last_checkpoint
-        if not training_args.enable_profiler:
+        if os.environ.get("BENCHMARK_ENABLE_TORCH_PROFILER", "OFF") == "OFF":
             train_result = trainer.train(resume_from_checkpoint=checkpoint)
         else:
             with torch.profiler.profile(
