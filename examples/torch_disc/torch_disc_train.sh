@@ -34,7 +34,12 @@ if [ "$ENABLE_LTC" == "ON" ]; then
   export BENCHMARK_ENABLE_TORCH_LTC=ON
 fi
 
-entry_cmd="python ../pytorch/text-classification/run_glue.py \
+if [ "$ENABLE_XLA" == "ON" ]; then
+  export GPU_NUM_DEVICES=1
+  launch_script="../pytorch/xla_spawn.py"
+fi
+
+entry_cmd="python $launch_script ../pytorch/text-classification/run_glue.py \
   --config_name bert-base-cased \
   --tokenizer_name bert-base-cased \
   --model_name_or_path bert-base-cased.bin \
@@ -47,6 +52,8 @@ entry_cmd="python ../pytorch/text-classification/run_glue.py \
   --overwrite_output_dir \
   --logging_steps 3000 \
   --save_steps 3000 "
+
+
 
 if [ "$ENABLE_NVPROF" == "ON" ]; then
   export BENCHMARK_ENABLE_NVPROF=ON
@@ -62,6 +69,8 @@ fi
 if [ "$DISABLE_GRAD_NORM" == "ON" ]; then
   entry_cmd="$entry_cmd --max_grad_norm 0"
 fi
+
+entry_cmd="$entry_cmd $@"
 
 set -ex
 $entry_cmd --output_dir /tmp/imdb 2>&1 | tee train.torch.log
