@@ -43,13 +43,8 @@ from .utils import logging
 if is_torch_available():
     import torch
 
-# if is_torch_tpu_available():
-#     #import lazy_tensor_core as ltc
-#     #import lazy_tensor_core.core.lazy_model as xm
-#     #xm.xla_device = xm.lazy_device
-#     #ltc._LAZYC._ltc_init_ts_backend()
-#     from torch._lazy import ts_backend as ltc
-#     ltc.init()
+if is_torch_tpu_available():
+    import torch_xla.core.xla_model as xm
 
 if is_sagemaker_dp_enabled():
     import smdistributed.dataparallel.torch.distributed as sm_dist
@@ -818,6 +813,7 @@ class TrainingArguments:
         if (
             is_torch_available()
             and self.device.type != "cuda"
+            and self.device.type != "xla"
             and (self.fp16 or self.fp16_full_eval or self.bf16 or self.bf16_full_eval)
         ):
             raise ValueError(
@@ -990,7 +986,7 @@ class TrainingArguments:
             device = torch.device('lazy')
             self._n_gpu = 0
         elif is_torch_tpu_available():
-            device = torch.device("lazy:0")# xm.xla_device(n=0,devkind='GPU')
+            device = xm.xla_device(devkind='GPU')
             self._n_gpu = 0
         elif is_sagemaker_mp_enabled():
             local_rank = smp.local_rank()
@@ -1095,7 +1091,7 @@ class TrainingArguments:
         The number of processes used in parallel.
         """
         if is_torch_tpu_available():
-            return 1 #xm.xrt_world_size()
+            return xm.xrt_world_size()
         elif is_sagemaker_mp_enabled():
             return smp.dp_size()
         elif is_sagemaker_dp_enabled():
@@ -1111,7 +1107,7 @@ class TrainingArguments:
         The index of the current process used.
         """
         if is_torch_tpu_available():
-            return 0 #xm.get_ordinal()
+            return xm.get_ordinal()
         elif is_sagemaker_mp_enabled():
             return smp.dp_rank()
         elif is_sagemaker_dp_enabled():
@@ -1127,8 +1123,7 @@ class TrainingArguments:
         The index of the local process used.
         """
         if is_torch_tpu_available():
-            # return xm.get_local_ordinal()
-            return 0
+            return xm.get_local_ordinal()
         elif is_sagemaker_mp_enabled():
             return smp.local_rank()
         elif is_sagemaker_dp_enabled():

@@ -27,6 +27,10 @@ while [[ $# -gt 0 ]]; do
       ENABLE_LTC="ON"
       shift
       ;;
+    --xla)
+      ENABLE_XLA="ON"
+      shift
+      ;;
     --disc)
       ENABLE_DISC="ON"
       shift
@@ -40,8 +44,6 @@ while [[ $# -gt 0 ]]; do
       exit
       ;;
     *)
-      echo "empty"
-      shift
-      ;;
+      return
   esac
 done
