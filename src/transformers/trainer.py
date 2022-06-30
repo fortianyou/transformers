@@ -163,8 +163,8 @@ if is_torch_ltc_available():
 
 if is_torch_disc_available():
     print("Enable Torch Disc !!")
-    import torch_disc as disc
-    disc._ltc_init_disc_backend()
+    import torch_blade as disc
+    disc.init_ltc_disc_backend()
 
 
 def is_nvprof_available():

@@ -454,7 +454,7 @@ def is_torch_disc_available():
         return False
     if os.environ.get("BENCHMARK_ENABLE_TORCH_DISC", "OFF") == "OFF":
         return False
-    return importlib.util.find_spec("torch_disc") is not None
+    return importlib.util.find_spec("torch_blade") is not None
 
 
 def is_torch_tpu_available():
