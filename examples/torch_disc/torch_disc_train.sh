@@ -18,6 +18,12 @@ function set_default_env() {
   rm -rf dump && mkdir -p dump
   #export LTC_SAVE_TENSORS_FILE=dump/ltc_ir.txt
   #export LTC_SAVE_TENSORS_FMT=backend
+  export TORCH_BLADE_MHLO_DEBUG_LOG=true
+  #export PYTORCH_NO_CUDA_MEMORY_CACHING=1
+  export CUDA_LAUNCH_BLOCKING=1
+  export PYTORCH_NVFUSER_DISABLE_FALLBACK=1
+  export PYTORCH_JIT_LOG_LEVEL=">>>disc_compiler:>>graph_fuser:graph_executor"
+  export DROP_LAST_BATCH=ON
 }
 
 source parse_args.sh
@@ -39,31 +45,36 @@ if [ "$ENABLE_XLA" == "ON" ]; then
   launch_script="../pytorch/xla_spawn.py"
 fi
 
+TASK_NAME=cola
+
 entry_cmd="python $launch_script ../pytorch/text-classification/run_glue.py \
   --config_name bert-base-cased \
   --tokenizer_name bert-base-cased \
   --model_name_or_path bert-base-cased.bin \
+  --task_name $TASK_NAME \
   --dataset_name imdb  \
   --do_train \
   --max_seq_length 128 \
-  --per_device_train_batch_size 32 \
+  --per_device_train_batch_size 64 \
   --learning_rate 2e-5 \
   --num_train_epochs 1 \
   --overwrite_output_dir \
+  --log_level debug \
   --logging_steps 3000 \
-  --save_steps 3000 "
+  --save_steps 3000 \
+  --logging_nan_inf_filter False "
 
 
 
 if [ "$ENABLE_NVPROF" == "ON" ]; then
   export BENCHMARK_ENABLE_NVPROF=ON
-  entry_cmd="nvprof --profile-from-start off $entry_cmd \
-  --max_steps=110 "
+  entry_cmd="nvprof --openacc-profiling off --profile-from-start off $entry_cmd \
+  --max_steps=120 "
 fi
 
 if [ "$ENABLE_TORCH_PROFILER" == "ON" ]; then
   export BENCHMARK_ENABLE_TORCH_PROFILER=ON
-  entry_cmd="$entry_cmd --max_steps 10"
+  entry_cmd="$entry_cmd --max_steps 4"
 fi
 
 if [ "$DISABLE_GRAD_NORM" == "ON" ]; then

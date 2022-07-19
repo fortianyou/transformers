@@ -157,8 +157,10 @@ if version.parse(torch.__version__) >= version.parse("1.6"):
 if is_torch_ltc_available():
     print("Enable Torch LTC !!")
     import torch._lazy as ltc
-    torch._C._lazy_ts_backend._init()
     import torch._lazy.metrics as ltc_metrics
+    if not is_torch_disc_available():
+        torch._C._lazy_ts_backend._init()
+    torch._C._jit_set_nvfuser_enabled(False)
 
 
 if is_torch_disc_available():
@@ -1341,15 +1343,19 @@ class Trainer:
 
             step = -1
             for step, inputs in enumerate(epoch_iterator):
-                if is_nvprof_available() and step == 90:
+                if os.environ.get("DROP_LAST_BATCH", "OFF") == "ON" and step == max_steps - 1:
+                    logger.info("drop the last batch")
+                    # NOTE: skip the last iteration to avoid re-compilation, just for benchmark
+                    break
+                if is_nvprof_available() and self.state.global_step == 90:
                     logger.info(f"nvprof start at step: {step}")
                     nvprof_start()
 
-                if is_nvprof_available() and step == 100:
+                if is_nvprof_available() and self.state.global_step == 100:
                     logger.info(f"nvprof end at step: {step}")
                     nvprof_end()
                 if self.state.global_step == skip_steps:
-                    start_time_skiped = time.time() 
+                    start_time_skiped = time.time()
                 # Skip past any already trained steps if resuming training
                 if steps_trained_in_current_epoch > 0:
                     steps_trained_in_current_epoch -= 1
@@ -1375,7 +1381,6 @@ class Trainer:
                         tr_loss_step = self.training_step(model, inputs)
                 else:
                     tr_loss_step = self.training_step(model, inputs)
-
                 if (
                     args.logging_nan_inf_filter
                     and not is_torch_tpu_available()
@@ -1456,6 +1461,16 @@ class Trainer:
 
                 if self.control.should_epoch_stop or self.control.should_training_stop:
                     break
+                if is_torch_ltc_available() and step % 10 == 0:
+                    logger.info("before mark step at step end")
+                    logger.info("------------- Begin Torch DISC LTC Metrics ---------------")
+                    for opname in ltc_metrics.counter_names():
+                        val = int(ltc_metrics.counter_value(opname))
+                        logger.info(f"{opname}={val}")
+                    logger.info("------------- End Torch DISC LTC Metrics ---------------")
+                    ltc_metrics.reset()
+                if is_torch_ltc_available():
+                    torch._lazy.mark_step()
             if step < 0:
                 logger.warning(
                     f"There seems to be not a single sample in your epoch_iterator, stopping training at step"
@@ -1978,11 +1993,11 @@ class Trainer:
             loss = self.deepspeed.backward(loss)
         else:
             loss.backward()
-
         if is_torch_ltc_available():
             ltc.mark_step()
 
-        return loss.detach()
+        #return loss.detach()
+        return loss
 
     def compute_loss(self, model, inputs, return_outputs=False):
         """
