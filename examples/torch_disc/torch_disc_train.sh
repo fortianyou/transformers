@@ -68,8 +68,6 @@ entry_cmd="python $launch_script ../pytorch/text-classification/run_glue.py \
 
 if [ "$ENABLE_NVPROF" == "ON" ]; then
   export BENCHMARK_ENABLE_NVPROF=ON
-  #entry_cmd="nsys nvprof --openacc-profiling off --profile-from-start off $entry_cmd \
-  #--max_steps=120 "
   entry_cmd="nsys profile -f true -c cudaProfilerApi $entry_cmd --max_steps=120 "
 
 fi

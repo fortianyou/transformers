@@ -1996,7 +1996,7 @@ class Trainer:
         if is_torch_ltc_available():
             ltc.mark_step()
 
-        return loss
+        return loss.detach()
 
     def compute_loss(self, model, inputs, return_outputs=False):
         """
