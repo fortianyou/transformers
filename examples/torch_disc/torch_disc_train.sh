@@ -5,7 +5,7 @@
 #   -O bert-base-cased.bin
 
 function set_default_env() {
-  export CUDA_VISIBLE_DEVICES=1
+  #export CUDA_VISIBLE_DEVICES=1
   # use the inner transformers Python package to easy to debug
   export PYTHONPATH=$(pwd)/../../src
   # this is used for nvprof
@@ -16,14 +16,14 @@ function set_default_env() {
 
   # LTC debug envs
   rm -rf dump && mkdir -p dump
-  #export LTC_SAVE_TENSORS_FILE=dump/ltc_ir.txt
-  #export LTC_SAVE_TENSORS_FMT=backend
-  export TORCH_BLADE_MHLO_DEBUG_LOG=true
-  #export PYTORCH_NO_CUDA_MEMORY_CACHING=1
-  export CUDA_LAUNCH_BLOCKING=1
   export PYTORCH_NVFUSER_DISABLE_FALLBACK=1
-  export PYTORCH_JIT_LOG_LEVEL=">>>disc_compiler:>>graph_fuser:graph_executor"
+  #export NVIDIA_TF32_OVERRIDE=0
+  export TORCH_DISC_USE_TORCH_MLIR=1
+  export PYTORCH_JIT_LOG_LEVEL=">>>disc_compiler:>>graph_fuser:>>>register_disc_class"
+  export TORCH_MHLO_OP_WHITE_LIST="aten::slice;aten::reshape;aten::permute;aten::embedding;aten::native_layer_norm;aten::native_dropout;aten::addmm;aten::bmm;aten::_softmax;aten::add;aten::sub;aten::mul;aten::div;aten::expand;aten::gelu;aten::_log_softmax;aten::sum;aten::mm;aten::native_dropout_backward;aten::gelu_backward;aten::_softmax_backward_data;aten::native_layer_norm_backward"
   export DROP_LAST_BATCH=ON
+  # enable torch-disc replay toolkit or not 
+  export TORCH_DISC_ENABLE_REPLAY=false
 }
 
 source parse_args.sh
@@ -55,7 +55,7 @@ entry_cmd="python $launch_script ../pytorch/text-classification/run_glue.py \
   --dataset_name imdb  \
   --do_train \
   --max_seq_length 128 \
-  --per_device_train_batch_size 64 \
+  --per_device_train_batch_size 48 \
   --learning_rate 2e-5 \
   --num_train_epochs 1 \
   --overwrite_output_dir \
@@ -68,8 +68,10 @@ entry_cmd="python $launch_script ../pytorch/text-classification/run_glue.py \
 
 if [ "$ENABLE_NVPROF" == "ON" ]; then
   export BENCHMARK_ENABLE_NVPROF=ON
-  entry_cmd="nvprof --openacc-profiling off --profile-from-start off $entry_cmd \
-  --max_steps=120 "
+  #entry_cmd="nsys nvprof --openacc-profiling off --profile-from-start off $entry_cmd \
+  #--max_steps=120 "
+  entry_cmd="nsys profile -f true -c cudaProfilerApi $entry_cmd --max_steps=120 "
+
 fi
 
 if [ "$ENABLE_TORCH_PROFILER" == "ON" ]; then

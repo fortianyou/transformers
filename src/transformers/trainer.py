@@ -1351,7 +1351,7 @@ class Trainer:
                     logger.info(f"nvprof start at step: {step}")
                     nvprof_start()
 
-                if is_nvprof_available() and self.state.global_step == 100:
+                if is_nvprof_available() and self.state.global_step == 91:
                     logger.info(f"nvprof end at step: {step}")
                     nvprof_end()
                 if self.state.global_step == skip_steps:
@@ -1445,7 +1445,7 @@ class Trainer:
                     if optimizer_was_run and not self.deepspeed:
                         self.lr_scheduler.step()
 
-                    model.zero_grad()
+                    model.zero_grad(set_to_none=True)
 
                     self.state.global_step += 1
                     self.state.epoch = epoch + (step + 1) / steps_in_epoch
@@ -1996,7 +1996,6 @@ class Trainer:
         if is_torch_ltc_available():
             ltc.mark_step()
 
-        #return loss.detach()
         return loss
 
     def compute_loss(self, model, inputs, return_outputs=False):
@@ -2451,9 +2450,6 @@ class Trainer:
 
                 # Set back to None to begin a new accumulation
                 losses_host, preds_host, labels_host = None, None, None
-
-            if is_torch_ltc_available():
-                ltc.mark_step()
 
         if args.past_index and hasattr(self, "_past"):
             # Clean the state at the end of the evaluation loop
