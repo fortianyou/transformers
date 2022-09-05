@@ -491,6 +491,7 @@ def main():
                     torch.profiler.ProfilerActivity.CUDA,
                 ],
                 with_stack=True,
+                profile_memory=True,
             #    on_trace_ready=torch.profiler.tensorboard_trace_handler(dir_name='tensorboard')
             ) as p:
                 train_result = trainer.train(resume_from_checkpoint=checkpoint, profiler=p)
@@ -499,6 +500,7 @@ def main():
             p.export_chrome_trace(os.path.join(profile_dir, 'train_profile_chrome.json'))
             p.export_stacks(os.path.join(profile_dir, 'stack.self_cpu_time_total.log'), metric='self_cpu_time_total')
             p.export_stacks(os.path.join(profile_dir, 'stack.self_cuda_time_total.log'), metric='self_cuda_time_total')
+            print(p.key_averages().table(sort_by="self_cpu_memory_usage", row_limit=10))
             with open(os.path.join(profile_dir, 'profile.self_cuda_time_total.log'), 'w') as writer:
                 writer.write(str(p.key_averages().table(sort_by="self_cuda_time_total", row_limit=-1)))
             with open(os.path.join(profile_dir, 'profile.self_cpu_time_total.log'), 'w') as writer:
